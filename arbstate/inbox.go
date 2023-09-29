@@ -85,7 +85,7 @@ func parseSequencerMessage(ctx context.Context, batchNum uint64, data []byte, da
 			log.Error("No Celestia Reader configured, but sequencer message found with Celestia header")
 		} else {
 			var err error
-			payload, err = RecoverPayloadFromCelestiaBatch(ctx, batchNum, data, celestiaReader)
+			payload, err = RecoverPayloadFromCelestiaBatch(ctx, batchNum, data, celestiaReader, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -253,6 +253,7 @@ func RecoverPayloadFromCelestiaBatch(
 	batchNum uint64,
 	sequencerMsg []byte,
 	celestiaReader celestia.DataAvailabilityReader,
+	preimages map[common.Hash][]byte,
 ) ([]byte, error) {
 	buf := bytes.NewBuffer(sequencerMsg[40:])
 
