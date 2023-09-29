@@ -298,6 +298,7 @@ func (v *StatelessBlockValidator) ValidationEntryRecord(ctx context.Context, e *
 		}
 		e.DelayedMsg = delayedMsg
 	}
+
 	for _, batch := range e.BatchInfo {
 		if len(batch.Data) <= 40 {
 			continue
