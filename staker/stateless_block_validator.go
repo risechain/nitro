@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/offchainlabs/nitro/arbos/arbostypes"
 	"github.com/offchainlabs/nitro/arbstate"
+	"github.com/offchainlabs/nitro/das/celestia"
 )
 
 type StatelessBlockValidator struct {
@@ -35,11 +36,12 @@ type StatelessBlockValidator struct {
 
 	recorder BlockRecorder
 
-	inboxReader  InboxReaderInterface
-	inboxTracker InboxTrackerInterface
-	streamer     TransactionStreamerInterface
-	db           ethdb.Database
-	daService    arbstate.DataAvailabilityReader
+	inboxReader     InboxReaderInterface
+	inboxTracker    InboxTrackerInterface
+	streamer        TransactionStreamerInterface
+	db              ethdb.Database
+	daService       arbstate.DataAvailabilityReader
+	celestiaService celestia.DataAvailabilityReader
 
 	moduleMutex           sync.Mutex
 	currentWasmModuleRoot common.Hash
@@ -237,6 +239,7 @@ func NewStatelessBlockValidator(
 	recorder BlockRecorder,
 	arbdb ethdb.Database,
 	das arbstate.DataAvailabilityReader,
+	celestiaService celestia.DataAvailabilityReader,
 	config func() *BlockValidatorConfig,
 	stack *node.Node,
 ) (*StatelessBlockValidator, error) {
@@ -253,6 +256,7 @@ func NewStatelessBlockValidator(
 		streamer:           streamer,
 		db:                 arbdb,
 		daService:          das,
+		celestiaService:    celestiaService,
 	}
 	return validator, nil
 }
@@ -303,19 +307,29 @@ func (v *StatelessBlockValidator) ValidationEntryRecord(ctx context.Context, e *
 		if len(batch.Data) <= 40 {
 			continue
 		}
-		if !arbstate.IsDASMessageHeaderByte(batch.Data[40]) {
-			continue
-		}
-		if v.daService == nil {
-			log.Warn("No DAS configured, but sequencer message found with DAS header")
-		} else {
-			_, err := arbstate.RecoverPayloadFromDasBatch(
-				ctx, batch.Number, batch.Data, v.daService, e.Preimages, arbstate.KeysetValidate,
-			)
-			if err != nil {
-				return err
+		if arbstate.IsDASMessageHeaderByte(batch.Data[40]) {
+			if v.daService == nil {
+				log.Warn("No DAS configured, but sequencer message found with DAS header")
+			} else {
+				_, err := arbstate.RecoverPayloadFromDasBatch(
+					ctx, batch.Number, batch.Data, v.daService, e.Preimages, arbstate.KeysetValidate,
+				)
+				if err != nil {
+					return err
+				}
 			}
 		}
+		if arbstate.IsCelestiaMessageHeaderByte(batch.Data[40]) {
+			if v.daService == nil {
+				log.Warn("No DAS configured, but sequencer message found with DAS header")
+			} else {
+				_, err := arbstate.RecoverPayloadFromCelestiaBatch(ctx, batch.Number, batch.Data, v.celestiaService, e.Preimages)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
 	}
 
 	e.msg = nil // no longer needed

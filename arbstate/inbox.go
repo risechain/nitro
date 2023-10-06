@@ -6,6 +6,7 @@ package arbstate
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -80,7 +81,7 @@ func parseSequencerMessage(ctx context.Context, batchNum uint64, data []byte, da
 		}
 	}
 
-	if len(payload) > 0 && celestia.IsCelestiaMessageHeaderByte(payload[0]) {
+	if len(payload) > 0 && IsCelestiaMessageHeaderByte(payload[0]) {
 		if celestiaReader == nil {
 			log.Error("No Celestia Reader configured, but sequencer message found with Celestia header")
 		} else {
@@ -253,8 +254,16 @@ func RecoverPayloadFromCelestiaBatch(
 	batchNum uint64,
 	sequencerMsg []byte,
 	celestiaReader celestia.DataAvailabilityReader,
-	preimages map[common.Hash][]byte,
+	preimages map[arbutil.PreimageType]map[common.Hash][]byte,
 ) ([]byte, error) {
+	var shaPreimages map[common.Hash][]byte
+	if preimages != nil {
+		if preimages[arbutil.Sha2_256PreimageType] == nil {
+			preimages[arbutil.Sha2_256PreimageType] = make(map[common.Hash][]byte)
+		}
+		shaPreimages = preimages[arbutil.Sha2_256PreimageType]
+	}
+
 	buf := bytes.NewBuffer(sequencerMsg[40:])
 
 	header, err := buf.ReadByte()
@@ -281,6 +290,13 @@ func RecoverPayloadFromCelestiaBatch(
 	}
 
 	log.Info("Succesfully fetched payload from Celestia", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
+
+	log.Info("Recording Sha256 preimage for Celestia data")
+
+	shaDataHash := sha256.New()
+	shaDataHash.Write(payload)
+	dataHash := shaDataHash.Sum([]byte{})
+	shaPreimages[common.BytesToHash(dataHash)] = payload
 
 	return payload, nil
 }
