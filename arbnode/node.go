@@ -541,6 +541,7 @@ func createNodeImpl(
 			exec,
 			rawdb.NewTable(arbDb, storage.BlockValidatorPrefix),
 			daReader,
+			celestiaReader,
 			func() *staker.BlockValidatorConfig { return &configFetcher.Get().BlockValidator },
 			stack,
 		)

@@ -76,9 +76,17 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, error) 
 
 	log.Info("Sucesfully posted data to Celestia", "height", height, "commitment", commitment)
 
+	log.Info("Retrieving data root for height ", height)
+
+	header, err := c.client.Header.GetByHeight(ctx, height)
+	if err != nil {
+		log.Warn("Header retrieval error", "err", err)
+		return nil, err
+	}
 	blobPointer := BlobPointer{
 		BlockHeight:  height,
 		TxCommitment: commitment,
+		DataRoot:     header.DataHash,
 	}
 
 	blobPointerData, err := blobPointer.MarshalBinary()
@@ -101,7 +109,7 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, error) 
 	}
 
 	serializedBlobPointerData := buf.Bytes()
-	log.Info("Succesfully serialized Blob Pointer", "height", height, "commitment", commitment)
+	log.Info("Succesfully serialized Blob Pointer", "height", height, "commitment", commitment, "data root", header.DataHash)
 	log.Trace("celestia.CelestiaDA.Store", "serialized_blob_pointer", serializedBlobPointerData)
 	return serializedBlobPointerData, nil
 

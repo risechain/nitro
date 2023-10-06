@@ -48,6 +48,10 @@ const ZeroheavyMessageHeaderFlag byte = 0x20
 // BrotliMessageHeaderByte indicates that the message is brotli-compressed.
 const BrotliMessageHeaderByte byte = 0
 
+// CelestiaMessageHeaderFlag indicates that this data is a Blob Pointer
+// which will be used to retrieve data from Celestia
+const CelestiaMessageHeaderFlag byte = 0x0c
+
 func IsDASMessageHeaderByte(header byte) bool {
 	return (DASMessageHeaderFlag & header) > 0
 }
@@ -62,6 +66,10 @@ func IsZeroheavyEncodedHeaderByte(header byte) bool {
 
 func IsBrotliMessageHeaderByte(b uint8) bool {
 	return b == BrotliMessageHeaderByte
+}
+
+func IsCelestiaMessageHeaderByte(header byte) bool {
+	return (CelestiaMessageHeaderFlag & header) > 0
 }
 
 type DataAvailabilityCertificate struct {

@@ -8,20 +8,21 @@ import (
 type BlobPointer struct {
 	BlockHeight  uint64
 	TxCommitment []byte
+	DataRoot     []byte
 }
 
 // MarshalBinary encodes the BlobPointer to binary
 // serialization format: height + commitment
 //
-//	----------------------------------------
+//	-------------------------------------------------------------
 //
-// | 8 byte uint64  |  32 byte commitment   |
+// | 8 byte uint64  |  32 byte commitment   | 32 byte data root |
 //
-//	----------------------------------------
+//	-------------------------------------------------------------
 //
-// | <-- height --> | <-- commitment -->    |
+// | <-- height --> | <-- commitment -->    | <-- data root --> |
 //
-//	----------------------------------------
+//	-------------------------------------------------------------
 func (b *BlobPointer) MarshalBinary() ([]byte, error) {
 	blob := make([]byte, 8+len(b.TxCommitment))
 
@@ -45,6 +46,7 @@ func (b *BlobPointer) MarshalBinary() ([]byte, error) {
 //	----------------------------------------
 func (b *BlobPointer) UnmarshalBinary(ref []byte) error {
 	b.BlockHeight = binary.LittleEndian.Uint64(ref[:8])
-	b.TxCommitment = ref[8:]
+	b.TxCommitment = ref[8:33]
+	b.DataRoot = ref[33:]
 	return nil
 }
