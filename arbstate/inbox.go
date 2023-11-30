@@ -6,7 +6,6 @@ package arbstate
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -22,6 +21,7 @@ import (
 	"github.com/offchainlabs/nitro/arbos/l1pricing"
 	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/das/celestia"
+	"github.com/offchainlabs/nitro/das/celestia/tree"
 	"github.com/offchainlabs/nitro/das/dastree"
 	"github.com/offchainlabs/nitro/zeroheavy"
 )
@@ -256,12 +256,12 @@ func RecoverPayloadFromCelestiaBatch(
 	celestiaReader celestia.DataAvailabilityReader,
 	preimages map[arbutil.PreimageType]map[common.Hash][]byte,
 ) ([]byte, error) {
-	var shaPreimages map[common.Hash][]byte
+	var sha256Preimages map[common.Hash][]byte
 	if preimages != nil {
 		if preimages[arbutil.Sha2_256PreimageType] == nil {
 			preimages[arbutil.Sha2_256PreimageType] = make(map[common.Hash][]byte)
 		}
-		shaPreimages = preimages[arbutil.Sha2_256PreimageType]
+		sha256Preimages = preimages[arbutil.Sha2_256PreimageType]
 	}
 
 	buf := bytes.NewBuffer(sequencerMsg[40:])
@@ -275,15 +275,20 @@ func RecoverPayloadFromCelestiaBatch(
 		return nil, errors.New("tried to deserialize a message that doesn't have the Celestia header")
 	}
 
+	recordPreimage := func(key common.Hash, value []byte) {
+		sha256Preimages[key] = value
+	}
+
 	blobPointer := celestia.BlobPointer{}
-	blobPointer.UnmarshalBinary(buf.Bytes())
+	blobBytes := buf.Bytes()
+	blobPointer.UnmarshalBinary(blobBytes)
 	if err != nil {
 		log.Error("Couldn't unmarshal Celestia blob pointer", "err", err)
 		return nil, err
 	}
 
 	log.Info("Attempting to fetch data for", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
-	payload, err := celestiaReader.Read(blobPointer)
+	payload, eds, err := celestiaReader.Read(ctx, blobPointer)
 	if err != nil {
 		log.Error("Failed to resolve blob pointer from celestia", "err", err)
 		return nil, err
@@ -291,12 +296,60 @@ func RecoverPayloadFromCelestiaBatch(
 
 	log.Info("Succesfully fetched payload from Celestia", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
 
-	log.Info("Recording Sha256 preimage for Celestia data")
+	// check what we actually need from eds, make a new struct that can be filled given the preimages
+	if sha256Preimages != nil {
+		log.Info("Recording Sha256 preimage for Celestia data")
+		if eds == nil {
+			log.Error("eds is nil, read from replay binary, but preimages are empty")
+			return nil, err
+		}
 
-	shaDataHash := sha256.New()
-	shaDataHash.Write(payload)
-	dataHash := shaDataHash.Sum([]byte{})
-	shaPreimages[common.BytesToHash(dataHash)] = payload
+		rowRoots, err := eds.RowRoots()
+		if err != nil {
+			log.Error("Failed to retrieve row roots from eds", "err", err)
+			return nil, err
+		}
+		log.Info("Row Roots from EDS", "rowRoots", rowRoots)
+		// Get square size, start row, and end row
+		squareSize := uint64(eds.Width())
+		startRow := blobPointer.Start / squareSize
+		endRow := (blobPointer.Start + blobPointer.SharesLength) / squareSize
+		// Compute row roots for the rows that contain our data
+		for i := startRow; i <= endRow; i++ {
+			root, err := tree.ComputeNmtRoot(recordPreimage, eds.Row(uint(i)))
+			if err != nil {
+				log.Error("Failed to compute row root", "err", err)
+				return nil, err
+			}
+
+			log.Info("Computed row root", "row", i, "root", root)
+			rowRootMatches := bytes.Equal(rowRoots[i], root)
+			if !rowRootMatches {
+				log.Error("Row roots do not match", "eds row root", rowRoots[i], "calculated", root)
+				return nil, err
+			}
+
+		}
+
+		// Compute data root
+		colRoots, err := eds.ColRoots()
+		if err != nil {
+			log.Error("Failed to retrieve col roots from eds", "err", err)
+			return nil, err
+		}
+		rowsCount := len(rowRoots)
+		slices := make([][]byte, rowsCount+rowsCount)
+		copy(slices[0:rowsCount], rowRoots)
+		copy(slices[rowsCount:], colRoots)
+
+		dataRoot := tree.HashFromByteSlices(recordPreimage, slices)
+
+		dataRootMatches := bytes.Equal(dataRoot, blobPointer.DataRoot)
+		if !dataRootMatches {
+			log.Error("Data Root do not match", "blobPointer data root", blobPointer.DataRoot, "calculated", dataRoot)
+			return nil, err
+		}
+	}
 
 	return payload, nil
 }

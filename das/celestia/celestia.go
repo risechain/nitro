@@ -7,10 +7,12 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/celestiaorg/rsmt2d"
 	"github.com/ethereum/go-ethereum/log"
 	openrpc "github.com/rollkit/celestia-openrpc"
 	"github.com/rollkit/celestia-openrpc/types/blob"
 	"github.com/rollkit/celestia-openrpc/types/share"
+	"github.com/tendermint/tendermint/rpc/client/http"
 )
 
 // CelestiaMessageHeaderFlag indicates that this data is a Blob Pointer
@@ -21,9 +23,11 @@ func IsCelestiaMessageHeaderByte(header byte) bool {
 	return (CelestiaMessageHeaderFlag & header) > 0
 }
 
+// Add Tendermint RPC for Full node Endpoint
 type CelestiaDA struct {
 	cfg       DAConfig
 	client    *openrpc.Client
+	trpc      *http.HTTP
 	namespace share.Namespace
 }
 
@@ -46,32 +50,59 @@ func NewCelestiaDA(cfg DAConfig) (*CelestiaDA, error) {
 		return nil, err
 	}
 
+	trpc, err := http.New(cfg.TendermintRPC, "/websocket")
+	if err != nil {
+		return nil, err
+	}
+	err = trpc.Start()
+	if err != nil {
+		return nil, err
+	}
+
 	return &CelestiaDA{
 		cfg:       cfg,
 		client:    daClient,
+		trpc:      trpc,
 		namespace: namespace,
 	}, nil
 }
 
-func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, error) {
+func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, error) {
+
 	dataBlob, err := blob.NewBlobV0(c.namespace, message)
 	if err != nil {
 		log.Warn("Error creating blob", "err", err)
-		return nil, err
+		return nil, false, err
 	}
+
 	commitment, err := blob.CreateCommitment(dataBlob)
 	if err != nil {
 		log.Warn("Error creating commitment", "err", err)
-		return nil, err
+		return nil, false, err
 	}
-	height, err := c.client.Blob.Submit(ctx, []*blob.Blob{dataBlob})
+	height, err := c.client.Blob.Submit(ctx, []*blob.Blob{dataBlob}, openrpc.DefaultSubmitOptions())
 	if err != nil {
 		log.Warn("Blob Submission error", "err", err)
-		return nil, err
+		return nil, false, err
 	}
 	if height == 0 {
 		log.Warn("Unexpected height from blob response", "height", height)
-		return nil, errors.New("unexpected response code")
+		return nil, false, errors.New("unexpected response code")
+	}
+
+	// how long do we have to wait to retrieve a proof?
+	log.Info("Retrieving Proof from Celestia", "height", height, "commitment", commitment)
+	proofs, err := c.client.Blob.GetProof(ctx, height, c.namespace, commitment)
+	if err != nil {
+		log.Warn("Error retrieving proof", "err", err)
+		return nil, false, err
+	}
+
+	log.Info("Checking for inclusion", "height", height, "commitment", commitment)
+	included, err := c.client.Blob.Included(ctx, height, c.namespace, proofs, commitment)
+	if err != nil {
+		log.Warn("Error checking for inclusion", "err", err, "proof", proofs)
+		return nil, included, err
 	}
 
 	log.Info("Sucesfully posted data to Celestia", "height", height, "commitment", commitment)
@@ -81,49 +112,80 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, error) 
 	header, err := c.client.Header.GetByHeight(ctx, height)
 	if err != nil {
 		log.Warn("Header retrieval error", "err", err)
-		return nil, err
+		return nil, included, err
+	}
+
+	var startIndex uint64
+	sharesLength := uint64(0)
+	for i, proof := range *proofs {
+		if i == 0 {
+			startIndex = uint64(proof.Start())
+		}
+		sharesLength += uint64(proof.End()) - uint64(proof.Start())
+	}
+
+	// 2. Get tRPC interface and query /data_root_inclusion_proof
+	proof, err := c.trpc.DataRootInclusionProof(ctx, height, startIndex, startIndex+sharesLength)
+	if err != nil {
+		log.Warn("DataRootInclusionProof error", "err", err)
+		return nil, included, err
 	}
 	blobPointer := BlobPointer{
 		BlockHeight:  height,
+		Start:        startIndex,
+		SharesLength: sharesLength,
+		Key:          uint64(proof.Proof.Index),
+		NumLeaves:    uint64(proof.Proof.Total),
 		TxCommitment: commitment,
 		DataRoot:     header.DataHash,
+		SideNodes:    proof.Proof.Aunts,
 	}
 
 	blobPointerData, err := blobPointer.MarshalBinary()
 	if err != nil {
 		log.Warn("BlobPointer MashalBinary error", "err", err)
-		return nil, err
+		return nil, included, err
 	}
 
 	buf := new(bytes.Buffer)
 	err = binary.Write(buf, binary.BigEndian, CelestiaMessageHeaderFlag)
 	if err != nil {
 		log.Warn("batch type byte serialization failed", "err", err)
-		return nil, err
+		return nil, included, err
 	}
 
 	err = binary.Write(buf, binary.BigEndian, blobPointerData)
 	if err != nil {
 		log.Warn("blob pointer data serialization failed", "err", err)
-		return nil, err
+		return nil, included, err
 	}
 
 	serializedBlobPointerData := buf.Bytes()
 	log.Info("Succesfully serialized Blob Pointer", "height", height, "commitment", commitment, "data root", header.DataHash)
 	log.Trace("celestia.CelestiaDA.Store", "serialized_blob_pointer", serializedBlobPointerData)
-	return serializedBlobPointerData, nil
+	return serializedBlobPointerData, included, nil
 
 }
 
-func (c *CelestiaDA) Read(blobPointer BlobPointer) ([]byte, error) {
+func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte, *rsmt2d.ExtendedDataSquare, error) {
 	log.Info("Requesting data from Celestia", "namespace", c.cfg.NamespaceId, "height", blobPointer.BlockHeight)
 
-	blob, err := c.client.Blob.Get(context.Background(), blobPointer.BlockHeight, c.namespace, blobPointer.TxCommitment)
+	blob, err := c.client.Blob.Get(ctx, blobPointer.BlockHeight, c.namespace, blobPointer.TxCommitment)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	header, err := c.client.Header.GetByHeight(ctx, blobPointer.BlockHeight)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	eds, err := c.client.Share.GetEDS(ctx, header)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	log.Info("Succesfully fetched data from Celestia", "namespace", c.cfg.NamespaceId, "height", blobPointer.BlockHeight, "commitment", blob.Commitment)
 
-	return blob.Data, nil
+	return blob.Data, eds, nil
 }

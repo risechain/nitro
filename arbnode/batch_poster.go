@@ -900,7 +900,10 @@ func (b *BatchPoster) maybePostSequencerBatch(ctx context.Context) (bool, error)
 	if b.daWriter == nil && b.celestiaWriter != nil {
 		// Store the data on Celestia and return a marhsalled BlobPointer, which gets used as the sequencerMsg
 		// which is later used to retrieve the data from Celestia
-		sequencerMsg, err = b.celestiaWriter.Store(ctx, sequencerMsg)
+
+		// Need to verify inclusion into Blobstream using bsWrapper.VerifyAttestation
+		// deal with the "Incldued variable here"
+		sequencerMsg, _, err = b.celestiaWriter.Store(ctx, sequencerMsg)
 		if err != nil {
 			return false, err
 		}
