@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/celestiaorg/rsmt2d"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -28,6 +29,8 @@ import (
 	"github.com/offchainlabs/nitro/arbstate"
 	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/cmd/chaininfo"
+	"github.com/offchainlabs/nitro/das/celestia"
+	"github.com/offchainlabs/nitro/das/celestia/tree"
 	"github.com/offchainlabs/nitro/das/dastree"
 	"github.com/offchainlabs/nitro/gethhook"
 	"github.com/offchainlabs/nitro/wavmio"
@@ -117,6 +120,62 @@ func (dasReader *PreimageDASReader) ExpirationPolicy(ctx context.Context) (arbst
 	return arbstate.DiscardImmediately, nil
 }
 
+type PreimageCelestiaReader struct {
+}
+
+func (dasReader *PreimageCelestiaReader) Read(ctx context.Context, blobPointer celestia.BlobPointer) ([]byte, *rsmt2d.ExtendedDataSquare, error) {
+	// write Merkle oracle
+	// write NMT oracle
+	oracle := func(hash common.Hash) ([]byte, error) {
+		return wavmio.ResolveTypedPreimage(arbutil.Sha2_256PreimageType, hash)
+	}
+
+	// first, walk down the merkle tree
+	leaves, err := tree.MerkleTreeContent(oracle, common.BytesToHash(blobPointer.DataRoot))
+	if err != nil {
+		log.Warn("Error revealing contents behind data root", "err", err)
+		return nil, nil, err
+	}
+
+	squareSize := uint64((len(leaves) / 2))
+	// split leaves in half to get row roots
+	rowRoots := leaves[:squareSize]
+
+	startRow := blobPointer.Start / squareSize
+	endRow := (blobPointer.Start + blobPointer.SharesLength) / squareSize
+
+	// get rows behind row root and shares for our blob
+
+	startIndex := blobPointer.Start - (squareSize * (startRow))
+	endIndex := (blobPointer.Start + blobPointer.SharesLength) - (squareSize * (startRow))
+	shares := [][]byte{}
+	for i := startRow; i <= endRow; i++ {
+		rowShares, err := tree.NmtContent(oracle, rowRoots[i])
+		if err != nil {
+			log.Warn("Error revealing contents behind row root", "row", i, "row root", rowRoots[i], "err", err)
+			return nil, nil, err
+		}
+
+		if startRow == endRow {
+			shares = append(shares, rowShares[startIndex:endIndex]...)
+		} else if i == startRow {
+			shares = append(shares, rowShares[startIndex:]...)
+		} else if i == endRow {
+			shares = append(shares, rowShares[:endRow]...)
+		} else {
+			shares = append(shares, rowShares[:]...)
+		}
+	}
+
+	data := []byte{}
+	for _, share := range shares {
+		// 1 byte for the leaf prefix and then 29 bytes for the namespace ID
+		data = append(data, share[30:]...)
+	}
+
+	return data, nil, nil
+}
+
 // To generate:
 // key, _ := crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
 // sig, _ := crypto.Sign(make([]byte, 32), key)
@@ -171,16 +230,21 @@ func main() {
 		if lastBlockHeader != nil {
 			delayedMessagesRead = lastBlockHeader.Nonce.Uint64()
 		}
-		var dasReader arbstate.DataAvailabilityReader
+
+		// var dasReader arbstate.DataAvailabilityReader
+		// if dasEnabled {
+		// 	dasReader = &PreimageDASReader{}
+		// }
+		var dasReader celestia.DataAvailabilityReader
 		if dasEnabled {
-			dasReader = &PreimageDASReader{}
+			dasReader = &PreimageCelestiaReader{}
 		}
 		backend := WavmInbox{}
 		var keysetValidationMode = arbstate.KeysetPanicIfInvalid
 		if backend.GetPositionWithinMessage() > 0 {
 			keysetValidationMode = arbstate.KeysetDontValidate
 		}
-		inboxMultiplexer := arbstate.NewInboxMultiplexer(backend, delayedMessagesRead, dasReader, nil, keysetValidationMode)
+		inboxMultiplexer := arbstate.NewInboxMultiplexer(backend, delayedMessagesRead, nil, dasReader, keysetValidationMode)
 		ctx := context.Background()
 		message, err := inboxMultiplexer.Pop(ctx)
 		if err != nil {
@@ -232,7 +296,10 @@ func main() {
 			}
 		}
 
-		message := readMessage(chainConfig.ArbitrumChainParams.DataAvailabilityCommittee)
+		// need to add Celestia or just "ExternalDA" as an option to the ArbitrumChainParams
+		// for now we hard code Cthis to treu and hardcode Celestia in `readMessage`
+		// to test the integration
+		message := readMessage(true)
 
 		chainContext := WavmChainContext{}
 		batchFetcher := func(batchNum uint64) ([]byte, error) {
