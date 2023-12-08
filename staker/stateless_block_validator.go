@@ -320,8 +320,8 @@ func (v *StatelessBlockValidator) ValidationEntryRecord(ctx context.Context, e *
 			}
 		}
 		if arbstate.IsCelestiaMessageHeaderByte(batch.Data[40]) {
-			if v.daService == nil {
-				log.Warn("No DAS configured, but sequencer message found with DAS header")
+			if v.celestiaService == nil {
+				log.Warn("Celestia not configured, but sequencer message found with Celestia header")
 			} else {
 				_, err := arbstate.RecoverPayloadFromCelestiaBatch(ctx, batch.Number, batch.Data, v.celestiaService, e.Preimages)
 				if err != nil {

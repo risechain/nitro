@@ -2,8 +2,6 @@ module github.com/offchainlabs/nitro
 
 go 1.21
 
-toolchain go1.21.0
-
 replace github.com/VictoriaMetrics/fastcache => ./fastcache
 
 replace github.com/ethereum/go-ethereum => ./go-ethereum
@@ -18,6 +16,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.10
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.9
 	github.com/cavaliergopher/grab/v3 v3.0.1
+	github.com/celestiaorg/nmt v0.20.0
+	github.com/celestiaorg/rsmt2d v0.11.0
 	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
 	github.com/codeclysm/extract/v3 v3.0.2
 	github.com/dgraph-io/badger/v3 v3.2103.2
@@ -27,6 +27,7 @@ require (
 	github.com/gdamore/tcell/v2 v2.6.0
 	github.com/google/go-cmp v0.5.9
 	github.com/hashicorp/golang-lru/v2 v2.0.5
+	github.com/ipfs/boxo v0.13.1
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-libipfs v0.7.0
 	github.com/ipfs/interface-go-ipfs-core v0.11.0
@@ -77,8 +78,6 @@ require (
 	github.com/celestiaorg/go-fraud v0.2.0 // indirect
 	github.com/celestiaorg/go-header v0.4.0 // indirect
 	github.com/celestiaorg/merkletree v0.0.0-20210714075610-a84dc3ddbbe4 // indirect
-	github.com/celestiaorg/nmt v0.20.0 // indirect
-	github.com/celestiaorg/rsmt2d v0.11.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/ceramicnetwork/go-dag-jose v0.1.0 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
@@ -136,7 +135,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.13.1 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
 	github.com/ipfs/go-block-format v0.1.2 // indirect
 	github.com/ipfs/go-blockservice v0.5.1 // indirect
@@ -151,7 +149,6 @@ require (
 	github.com/ipfs/go-ipfs-blockstore v1.3.0 // indirect
 	github.com/ipfs/go-ipfs-delay v0.0.1 // indirect
 	github.com/ipfs/go-ipfs-ds-help v1.1.0 // indirect
-	github.com/ipfs/go-ipfs-exchange-interface v0.2.0 // indirect
 	github.com/ipfs/go-ipfs-pq v0.0.3 // indirect
 	github.com/ipfs/go-ipfs-redirects-file v0.1.1 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.3 // indirect
@@ -161,12 +158,10 @@ require (
 	github.com/ipfs/go-ipld-legacy v0.2.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/ipfs/go-merkledag v0.11.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-path v0.3.1 // indirect
 	github.com/ipfs/go-peertaskqueue v0.8.1 // indirect
 	github.com/ipfs/go-unixfsnode v1.8.1 // indirect
-	github.com/ipfs/go-verifcid v0.0.2 // indirect
 	github.com/ipld/go-car/v2 v2.10.2-0.20230622090957-499d0c909d33 // indirect
 	github.com/ipld/go-codec-dagpb v1.6.0 // indirect
 	github.com/ipld/go-ipld-prime v0.21.0 // indirect

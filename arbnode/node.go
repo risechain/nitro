@@ -769,6 +769,7 @@ func createNodeImpl(
 	} else if l2BlockChain.Config().ArbitrumChainParams.DataAvailabilityCommittee {
 		return nil, errors.New("a data availability service is required for this chain, but it was not configured")
 	} else if config.Celestia.Enable {
+		log.Info("Celestia AUTH token", "auth", config.Celestia.AuthToken)
 		celestiaService, err := celestia.NewCelestiaDA(config.Celestia)
 		if err != nil {
 			return nil, err

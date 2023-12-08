@@ -288,7 +288,7 @@ func RecoverPayloadFromCelestiaBatch(
 	}
 
 	log.Info("Attempting to fetch data for", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
-	payload, eds, err := celestiaReader.Read(ctx, blobPointer)
+	payload, squareData, err := celestiaReader.Read(ctx, blobPointer)
 	if err != nil {
 		log.Error("Failed to resolve blob pointer from celestia", "err", err)
 		return nil, err
@@ -299,48 +299,38 @@ func RecoverPayloadFromCelestiaBatch(
 	// check what we actually need from eds, make a new struct that can be filled given the preimages
 	if sha256Preimages != nil {
 		log.Info("Recording Sha256 preimage for Celestia data")
-		if eds == nil {
-			log.Error("eds is nil, read from replay binary, but preimages are empty")
+		if squareData == nil {
+			log.Error("squareData is nil, read from replay binary, but preimages are empty")
 			return nil, err
 		}
 
-		rowRoots, err := eds.RowRoots()
-		if err != nil {
-			log.Error("Failed to retrieve row roots from eds", "err", err)
-			return nil, err
-		}
-		log.Info("Row Roots from EDS", "rowRoots", rowRoots)
-		// Get square size, start row, and end row
-		squareSize := uint64(eds.Width())
-		startRow := blobPointer.Start / squareSize
-		endRow := (blobPointer.Start + blobPointer.SharesLength) / squareSize
 		// Compute row roots for the rows that contain our data
-		for i := startRow; i <= endRow; i++ {
-			root, err := tree.ComputeNmtRoot(recordPreimage, eds.Row(uint(i)))
+		log.Info("Computing NMT roots", "square_size", squareData.SquareSize, "blob_pointer_start", blobPointer.Start, "startRow", squareData.StartRow, "endRow", squareData.EndRow)
+
+		rowIndex := squareData.StartRow
+		squareSize := squareData.SquareSize
+		for _, row := range squareData.Rows {
+			// half of the squareSize for the EDS gives us the original length of the data
+			treeConstructor := tree.NewConstructor(recordPreimage, squareSize/2)
+			root, err := tree.ComputeNmtRoot(treeConstructor, uint(rowIndex), row)
 			if err != nil {
 				log.Error("Failed to compute row root", "err", err)
 				return nil, err
 			}
 
-			log.Info("Computed row root", "row", i, "root", root)
-			rowRootMatches := bytes.Equal(rowRoots[i], root)
+			rowRootMatches := bytes.Equal(squareData.RowRoots[rowIndex], root)
 			if !rowRootMatches {
-				log.Error("Row roots do not match", "eds row root", rowRoots[i], "calculated", root)
+				log.Error("Row roots do not match", "eds row root", squareData.RowRoots[rowIndex], "calculated", root)
+				log.Error("Row roots", "row_roots", squareData.RowRoots)
 				return nil, err
 			}
-
+			rowIndex += 1
 		}
 
-		// Compute data root
-		colRoots, err := eds.ColRoots()
-		if err != nil {
-			log.Error("Failed to retrieve col roots from eds", "err", err)
-			return nil, err
-		}
-		rowsCount := len(rowRoots)
+		rowsCount := len(squareData.RowRoots)
 		slices := make([][]byte, rowsCount+rowsCount)
-		copy(slices[0:rowsCount], rowRoots)
-		copy(slices[rowsCount:], colRoots)
+		copy(slices[0:rowsCount], squareData.RowRoots)
+		copy(slices[rowsCount:], squareData.ColumnRoots)
 
 		dataRoot := tree.HashFromByteSlices(recordPreimage, slices)
 
@@ -349,6 +339,7 @@ func RecoverPayloadFromCelestiaBatch(
 			log.Error("Data Root do not match", "blobPointer data root", blobPointer.DataRoot, "calculated", dataRoot)
 			return nil, err
 		}
+		log.Info("Succesfully compute roots and populated preimage mapping", "original_dataRoot", blobPointer.DataRoot, "computed_dataRoot", dataRoot)
 	}
 
 	return payload, nil
