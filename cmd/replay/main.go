@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/celestiaorg/rsmt2d"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -123,7 +122,7 @@ func (dasReader *PreimageDASReader) ExpirationPolicy(ctx context.Context) (arbst
 type PreimageCelestiaReader struct {
 }
 
-func (dasReader *PreimageCelestiaReader) Read(ctx context.Context, blobPointer celestia.BlobPointer) ([]byte, *rsmt2d.ExtendedDataSquare, error) {
+func (dasReader *PreimageCelestiaReader) Read(ctx context.Context, blobPointer celestia.BlobPointer) ([]byte, *celestia.SquareData, error) {
 	// write Merkle oracle
 	// write NMT oracle
 	oracle := func(hash common.Hash) ([]byte, error) {

@@ -1,6 +1,7 @@
 package celestia
 
 import (
+	"bytes"
 	"encoding/binary"
 )
 
@@ -19,40 +20,112 @@ type BlobPointer struct {
 // MarshalBinary encodes the BlobPointer to binary
 // serialization format: height + start + end + commitment + data root
 func (b *BlobPointer) MarshalBinary() ([]byte, error) {
-	blob := make([]byte, 8*3+len(b.TxCommitment)+len(b.DataRoot))
+	buf := new(bytes.Buffer)
 
-	binary.LittleEndian.PutUint64(blob, b.BlockHeight)
-	binary.LittleEndian.PutUint64(blob[8:16], b.Start)
-	binary.LittleEndian.PutUint64(blob[16:24], b.SharesLength)
-	binary.LittleEndian.PutUint64(blob[24:32], b.Key)
-	binary.LittleEndian.PutUint64(blob[32:40], b.NumLeaves)
-	copy(blob[40:72], b.TxCommitment)
-	copy(blob[72:104], b.DataRoot)
-
-	// each side node is 32 bytes (sha256 merkle tree hash)
-	for i, node := range b.SideNodes {
-		index := 104 + (i * 32)
-		copy(blob[index:index+32], node)
+	// Writing fixed-size values
+	if err := binary.Write(buf, binary.LittleEndian, b.BlockHeight); err != nil {
+		return nil, err
 	}
-	return blob, nil
+	if err := binary.Write(buf, binary.LittleEndian, b.Start); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, b.SharesLength); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, b.Key); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, b.NumLeaves); err != nil {
+		return nil, err
+	}
+
+	// Writing variable-size values
+	if err := writeBytes(buf, b.TxCommitment); err != nil {
+		return nil, err
+	}
+	if err := writeBytes(buf, b.DataRoot); err != nil {
+		return nil, err
+	}
+
+	// Writing slice of slices
+	if err := binary.Write(buf, binary.LittleEndian, uint64(len(b.SideNodes))); err != nil {
+		return nil, err
+	}
+	for _, sideNode := range b.SideNodes {
+		if err := writeBytes(buf, sideNode); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// writeBytes writes a length-prefixed byte slice to the buffer
+func writeBytes(buf *bytes.Buffer, data []byte) error {
+	if err := binary.Write(buf, binary.LittleEndian, uint64(len(data))); err != nil {
+		return err
+	}
+	if _, err := buf.Write(data); err != nil {
+		return err
+	}
+	return nil
 }
 
 // UnmarshalBinary decodes the binary to BlobPointer
 // serialization format: height + start + end + commitment + data root
-func (b *BlobPointer) UnmarshalBinary(ref []byte) error {
-	b.BlockHeight = binary.LittleEndian.Uint64(ref[:8])
-	b.Start = binary.LittleEndian.Uint64(ref[8:16])
-	b.SharesLength = binary.LittleEndian.Uint64(ref[16:24])
-	b.Key = binary.LittleEndian.Uint64(ref[24:32])
-	b.NumLeaves = binary.LittleEndian.Uint64(ref[32:40])
-	b.TxCommitment = ref[40:72]
-	b.DataRoot = ref[72:104]
-	sideNodesLength := len(ref[104:])
-	b.SideNodes = make([][]byte, sideNodesLength)
+func (b *BlobPointer) UnmarshalBinary(data []byte) error {
+	buf := bytes.NewReader(data)
 
-	for i := range b.SideNodes {
-		index := 104 + (i * 32)
-		b.SideNodes[i] = ref[index : index+32]
+	// Reading fixed-size values
+	if err := binary.Read(buf, binary.LittleEndian, &b.BlockHeight); err != nil {
+		return err
 	}
+	if err := binary.Read(buf, binary.LittleEndian, &b.Start); err != nil {
+		return err
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &b.SharesLength); err != nil {
+		return err
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &b.Key); err != nil {
+		return err
+	}
+	if err := binary.Read(buf, binary.LittleEndian, &b.NumLeaves); err != nil {
+		return err
+	}
+
+	// Reading variable-size values
+	var err error
+	if b.TxCommitment, err = readBytes(buf); err != nil {
+		return err
+	}
+	if b.DataRoot, err = readBytes(buf); err != nil {
+		return err
+	}
+
+	// Reading slice of slices
+	var sideNodesLen uint64
+	if err := binary.Read(buf, binary.LittleEndian, &sideNodesLen); err != nil {
+		return err
+	}
+	b.SideNodes = make([][]byte, sideNodesLen)
+	for i := uint64(0); i < sideNodesLen; i++ {
+		if b.SideNodes[i], err = readBytes(buf); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// readBytes reads a length-prefixed byte slice from the buffer
+func readBytes(buf *bytes.Reader) ([]byte, error) {
+	var length uint64
+	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+		return nil, err
+	}
+	data := make([]byte, length)
+	if _, err := buf.Read(data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }

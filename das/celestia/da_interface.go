@@ -2,8 +2,6 @@ package celestia
 
 import (
 	"context"
-
-	"github.com/celestiaorg/rsmt2d"
 )
 
 type DataAvailabilityWriter interface {
@@ -12,5 +10,5 @@ type DataAvailabilityWriter interface {
 
 // make output of read include eds or not
 type DataAvailabilityReader interface {
-	Read(context.Context, BlobPointer) ([]byte, *rsmt2d.ExtendedDataSquare, error)
+	Read(context.Context, BlobPointer) ([]byte, *SquareData, error)
 }

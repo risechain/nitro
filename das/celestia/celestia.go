@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/celestiaorg/rsmt2d"
 	"github.com/ethereum/go-ethereum/log"
 	openrpc "github.com/rollkit/celestia-openrpc"
 	"github.com/rollkit/celestia-openrpc/types/blob"
@@ -52,6 +51,7 @@ func NewCelestiaDA(cfg DAConfig) (*CelestiaDA, error) {
 
 	trpc, err := http.New(cfg.TendermintRPC, "/websocket")
 	if err != nil {
+		log.Error("Unable to establish connection with celestia-core tendermint rpc")
 		return nil, err
 	}
 	err = trpc.Start()
@@ -74,12 +74,12 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 		log.Warn("Error creating blob", "err", err)
 		return nil, false, err
 	}
-
 	commitment, err := blob.CreateCommitment(dataBlob)
 	if err != nil {
 		log.Warn("Error creating commitment", "err", err)
 		return nil, false, err
 	}
+	log.Info("Blob to be submitted: ", "blob", []*blob.Blob{dataBlob})
 	height, err := c.client.Blob.Submit(ctx, []*blob.Blob{dataBlob}, openrpc.DefaultSubmitOptions())
 	if err != nil {
 		log.Warn("Blob Submission error", "err", err)
@@ -107,7 +107,7 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 
 	log.Info("Sucesfully posted data to Celestia", "height", height, "commitment", commitment)
 
-	log.Info("Retrieving data root for height ", height)
+	log.Info("Retrieving data root for height ", "height", height)
 
 	header, err := c.client.Header.GetByHeight(ctx, height)
 	if err != nil {
@@ -125,11 +125,12 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 	}
 
 	// 2. Get tRPC interface and query /data_root_inclusion_proof
-	proof, err := c.trpc.DataRootInclusionProof(ctx, height, startIndex, startIndex+sharesLength)
+	proof, err := c.trpc.DataRootInclusionProof(ctx, height, height, height+1)
 	if err != nil {
 		log.Warn("DataRootInclusionProof error", "err", err)
 		return nil, included, err
 	}
+
 	blobPointer := BlobPointer{
 		BlockHeight:  height,
 		Start:        startIndex,
@@ -137,7 +138,7 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 		Key:          uint64(proof.Proof.Index),
 		NumLeaves:    uint64(proof.Proof.Total),
 		TxCommitment: commitment,
-		DataRoot:     header.DataHash,
+		DataRoot:     header.DAH.Hash(),
 		SideNodes:    proof.Proof.Aunts,
 	}
 
@@ -167,7 +168,17 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 
 }
 
-func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte, *rsmt2d.ExtendedDataSquare, error) {
+type SquareData struct {
+	RowRoots    [][]byte
+	ColumnRoots [][]byte
+	Rows        [][][]byte
+	// Refers to the square size of the extended data square
+	SquareSize uint64
+	StartRow   uint64
+	EndRow     uint64
+}
+
+func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte, *SquareData, error) {
 	log.Info("Requesting data from Celestia", "namespace", c.cfg.NamespaceId, "height", blobPointer.BlockHeight)
 
 	blob, err := c.client.Blob.Get(ctx, blobPointer.BlockHeight, c.namespace, blobPointer.TxCommitment)
@@ -185,7 +196,26 @@ func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte,
 		return nil, nil, err
 	}
 
+	squareSize := uint64(eds.Width())
+	startRow := blobPointer.Start / squareSize
+	log.Info("End Row", "blobPointer.Start", blobPointer.Start, "shares length", blobPointer.SharesLength, "squareSize", squareSize)
+	endRow := (blobPointer.Start + blobPointer.SharesLength) / squareSize
+
+	rows := [][][]byte{}
+	for i := startRow; i <= endRow; i++ {
+		rows = append(rows, eds.Row(uint(i)))
+	}
+
+	squareData := SquareData{
+		RowRoots:    header.DAH.RowRoots,
+		ColumnRoots: header.DAH.ColumnRoots,
+		Rows:        rows,
+		SquareSize:  squareSize,
+		StartRow:    startRow,
+		EndRow:      endRow,
+	}
+
 	log.Info("Succesfully fetched data from Celestia", "namespace", c.cfg.NamespaceId, "height", blobPointer.BlockHeight, "commitment", blob.Commitment)
 
-	return blob.Data, eds, nil
+	return blob.Data, &squareData, nil
 }
