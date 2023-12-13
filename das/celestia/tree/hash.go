@@ -21,11 +21,16 @@ func emptyHash() []byte {
 func leafHash(record func(bytes32, []byte), leaf []byte) []byte {
 	preimage := append(leafPrefix, leaf...)
 	hash := tmhash.Sum(preimage)
+
 	record(common.BytesToHash(hash), preimage)
 	return hash
 }
 
 // returns tmhash(0x01 || left || right)
-func innerHash(left []byte, right []byte) []byte {
+func innerHash(record func(bytes32, []byte), left []byte, right []byte) []byte {
+	preimage := append(innerPrefix, append(left, right...)...)
+	hash := tmhash.Sum(preimage)
+
+	record(common.BytesToHash(hash), preimage)
 	return tmhash.Sum(append(innerPrefix, append(left, right...)...))
 }

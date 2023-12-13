@@ -1,7 +1,6 @@
 package tree
 
 import (
-	"bytes"
 	"errors"
 
 	"github.com/celestiaorg/rsmt2d"
@@ -40,10 +39,11 @@ func isComplete(shares [][]byte) bool {
 // note that a leaf has the format minNID || maxNID || hash, here hash is the hash of the left and right
 // (NodePrefix) || (leftMinNID || leftMaxNID || leftHash) || (rightMinNID || rightMaxNID || rightHash)
 func getNmtChildrenHashes(hash []byte) (leftChild, rightChild []byte) {
-	flagLen := NamespaceSize * 2
+	hash = hash[1:]
+	flagLen := int(NamespaceSize * 2)
 	sha256Len := 32
-	leftChild = hash[1 : flagLen+sha256Len]
-	rightChild = hash[flagLen+sha256Len+1:]
+	leftChild = hash[:flagLen+sha256Len]
+	rightChild = hash[flagLen+sha256Len:]
 	return leftChild, rightChild
 }
 
@@ -54,10 +54,8 @@ func NmtContent(oracle func(bytes32) ([]byte, error), rootHash []byte) ([][]byte
 		return nil, err
 	}
 
-	minNid := rootHash[:NamespaceSize]
-	maxNid := rootHash[NamespaceSize : NamespaceSize*2]
 	// check if the hash corresponds to a leaf
-	if bytes.Equal(minNid, maxNid) {
+	if preimage[0] == leafPrefix[0] {
 		// returns the data with the namespace ID prepended
 		return [][]byte{preimage[1:]}, nil
 	}
