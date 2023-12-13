@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -123,8 +124,6 @@ type PreimageCelestiaReader struct {
 }
 
 func (dasReader *PreimageCelestiaReader) Read(ctx context.Context, blobPointer celestia.BlobPointer) ([]byte, *celestia.SquareData, error) {
-	// write Merkle oracle
-	// write NMT oracle
 	oracle := func(hash common.Hash) ([]byte, error) {
 		return wavmio.ResolveTypedPreimage(arbutil.Sha2_256PreimageType, hash)
 	}
@@ -136,43 +135,65 @@ func (dasReader *PreimageCelestiaReader) Read(ctx context.Context, blobPointer c
 		return nil, nil, err
 	}
 
-	squareSize := uint64((len(leaves) / 2))
+	squareSize := uint64(len(leaves)) / 2
 	// split leaves in half to get row roots
 	rowRoots := leaves[:squareSize]
 
-	startRow := blobPointer.Start / squareSize
-	endRow := (blobPointer.Start + blobPointer.SharesLength) / squareSize
+	// We geth the original data square size, wich is (size_of_the_extended_square / 2)
+	odsSize := squareSize / 2
+
+	startRow := blobPointer.Start / odsSize
+	endRow := (blobPointer.Start + blobPointer.SharesLength) / odsSize
+
+	startIndex := (blobPointer.Start - (odsSize * (startRow)))
+
+	endIndex := (blobPointer.Start + blobPointer.SharesLength) - (odsSize * (endRow))
 
 	// get rows behind row root and shares for our blob
-
-	startIndex := blobPointer.Start - (squareSize * (startRow))
-	endIndex := (blobPointer.Start + blobPointer.SharesLength) - (squareSize * (startRow))
+	rows := [][][]byte{}
 	shares := [][]byte{}
 	for i := startRow; i <= endRow; i++ {
-		rowShares, err := tree.NmtContent(oracle, rowRoots[i])
+		row, err := tree.NmtContent(oracle, rowRoots[i])
 		if err != nil {
-			log.Warn("Error revealing contents behind row root", "row", i, "row root", rowRoots[i], "err", err)
 			return nil, nil, err
 		}
+		rows = append(rows, row)
 
 		if startRow == endRow {
-			shares = append(shares, rowShares[startIndex:endIndex]...)
+			shares = append(shares, row[startIndex:endIndex]...)
 		} else if i == startRow {
-			shares = append(shares, rowShares[startIndex:]...)
+			shares = append(shares, row[startIndex:odsSize]...)
 		} else if i == endRow {
-			shares = append(shares, rowShares[:endRow]...)
+			shares = append(shares, row[:endIndex]...)
 		} else {
-			shares = append(shares, rowShares[:]...)
+			shares = append(shares, row[:odsSize]...)
 		}
 	}
 
 	data := []byte{}
-	for _, share := range shares {
-		// 1 byte for the leaf prefix and then 29 bytes for the namespace ID
-		data = append(data, share[30:]...)
+	sequenceLength := binary.BigEndian.Uint32(shares[0][tree.NamespaceSize*2+1 : tree.NamespaceSize*2+5])
+	for i, share := range shares {
+		// trim extra namespace
+		share := share[29:]
+		if i == 0 {
+			data = append(data, share[tree.NamespaceSize+5:]...)
+			continue
+		}
+		data = append(data, share[tree.NamespaceSize+1:]...)
+
 	}
 
-	return data, nil, nil
+	// TODO return Square Data
+	data = data[:sequenceLength]
+	squareData := celestia.SquareData{
+		RowRoots:    rowRoots,
+		ColumnRoots: leaves[squareSize:],
+		Rows:        rows,
+		SquareSize:  squareSize,
+		StartRow:    startRow,
+		EndRow:      endRow,
+	}
+	return data, &squareData, nil
 }
 
 // To generate:
@@ -239,11 +260,11 @@ func main() {
 			dasReader = &PreimageCelestiaReader{}
 		}
 		backend := WavmInbox{}
-		var keysetValidationMode = arbstate.KeysetPanicIfInvalid
-		if backend.GetPositionWithinMessage() > 0 {
-			keysetValidationMode = arbstate.KeysetDontValidate
-		}
-		inboxMultiplexer := arbstate.NewInboxMultiplexer(backend, delayedMessagesRead, nil, dasReader, keysetValidationMode)
+		// var keysetValidationMode = arbstate.KeysetPanicIfInvalid
+		// if backend.GetPositionWithinMessage() > 0 {
+		// 	keysetValidationMode = arbstate.KeysetDontValidate
+		// }
+		inboxMultiplexer := arbstate.NewInboxMultiplexer(backend, delayedMessagesRead, nil, dasReader, arbstate.KeysetDontValidate)
 		ctx := context.Background()
 		message, err := inboxMultiplexer.Pop(ctx)
 		if err != nil {

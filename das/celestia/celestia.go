@@ -74,12 +74,12 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 		log.Warn("Error creating blob", "err", err)
 		return nil, false, err
 	}
+
 	commitment, err := blob.CreateCommitment(dataBlob)
 	if err != nil {
 		log.Warn("Error creating commitment", "err", err)
 		return nil, false, err
 	}
-	log.Info("Blob to be submitted: ", "blob", []*blob.Blob{dataBlob})
 	height, err := c.client.Blob.Submit(ctx, []*blob.Blob{dataBlob}, openrpc.DefaultSubmitOptions())
 	if err != nil {
 		log.Warn("Blob Submission error", "err", err)
@@ -91,23 +91,18 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 	}
 
 	// how long do we have to wait to retrieve a proof?
-	log.Info("Retrieving Proof from Celestia", "height", height, "commitment", commitment)
+	//log.Info("Retrieving Proof from Celestia", "height", height, "commitment", commitment)
 	proofs, err := c.client.Blob.GetProof(ctx, height, c.namespace, commitment)
 	if err != nil {
 		log.Warn("Error retrieving proof", "err", err)
 		return nil, false, err
 	}
 
-	log.Info("Checking for inclusion", "height", height, "commitment", commitment)
 	included, err := c.client.Blob.Included(ctx, height, c.namespace, proofs, commitment)
 	if err != nil {
 		log.Warn("Error checking for inclusion", "err", err, "proof", proofs)
 		return nil, included, err
 	}
-
-	log.Info("Sucesfully posted data to Celestia", "height", height, "commitment", commitment)
-
-	log.Info("Retrieving data root for height ", "height", height)
 
 	header, err := c.client.Header.GetByHeight(ctx, height)
 	if err != nil {
@@ -162,7 +157,6 @@ func (c *CelestiaDA) Store(ctx context.Context, message []byte) ([]byte, bool, e
 	}
 
 	serializedBlobPointerData := buf.Bytes()
-	log.Info("Succesfully serialized Blob Pointer", "height", height, "commitment", commitment, "data root", header.DataHash)
 	log.Trace("celestia.CelestiaDA.Store", "serialized_blob_pointer", serializedBlobPointerData)
 	return serializedBlobPointerData, included, nil
 
@@ -179,8 +173,6 @@ type SquareData struct {
 }
 
 func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte, *SquareData, error) {
-	log.Info("Requesting data from Celestia", "namespace", c.cfg.NamespaceId, "height", blobPointer.BlockHeight)
-
 	blob, err := c.client.Blob.Get(ctx, blobPointer.BlockHeight, c.namespace, blobPointer.TxCommitment)
 	if err != nil {
 		return nil, nil, err
@@ -197,9 +189,9 @@ func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte,
 	}
 
 	squareSize := uint64(eds.Width())
-	startRow := blobPointer.Start / squareSize
-	log.Info("End Row", "blobPointer.Start", blobPointer.Start, "shares length", blobPointer.SharesLength, "squareSize", squareSize)
-	endRow := (blobPointer.Start + blobPointer.SharesLength) / squareSize
+	odsSquareSize := squareSize / 2
+	startRow := blobPointer.Start / odsSquareSize
+	endRow := (blobPointer.Start + blobPointer.SharesLength) / odsSquareSize
 
 	rows := [][][]byte{}
 	for i := startRow; i <= endRow; i++ {
@@ -214,8 +206,6 @@ func (c *CelestiaDA) Read(ctx context.Context, blobPointer BlobPointer) ([]byte,
 		StartRow:    startRow,
 		EndRow:      endRow,
 	}
-
-	log.Info("Succesfully fetched data from Celestia", "namespace", c.cfg.NamespaceId, "height", blobPointer.BlockHeight, "commitment", blob.Commitment)
 
 	return blob.Data, &squareData, nil
 }

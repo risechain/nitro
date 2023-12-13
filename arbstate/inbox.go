@@ -287,25 +287,20 @@ func RecoverPayloadFromCelestiaBatch(
 		return nil, err
 	}
 
-	log.Info("Attempting to fetch data for", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
 	payload, squareData, err := celestiaReader.Read(ctx, blobPointer)
 	if err != nil {
 		log.Error("Failed to resolve blob pointer from celestia", "err", err)
 		return nil, err
 	}
 
-	log.Info("Succesfully fetched payload from Celestia", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
+	//log.Info("Succesfully fetched payload from Celestia", "batchNum", batchNum, "celestiaHeight", blobPointer.BlockHeight)
 
 	// check what we actually need from eds, make a new struct that can be filled given the preimages
 	if sha256Preimages != nil {
-		log.Info("Recording Sha256 preimage for Celestia data")
 		if squareData == nil {
 			log.Error("squareData is nil, read from replay binary, but preimages are empty")
 			return nil, err
 		}
-
-		// Compute row roots for the rows that contain our data
-		log.Info("Computing NMT roots", "square_size", squareData.SquareSize, "blob_pointer_start", blobPointer.Start, "startRow", squareData.StartRow, "endRow", squareData.EndRow)
 
 		rowIndex := squareData.StartRow
 		squareSize := squareData.SquareSize
@@ -339,7 +334,6 @@ func RecoverPayloadFromCelestiaBatch(
 			log.Error("Data Root do not match", "blobPointer data root", blobPointer.DataRoot, "calculated", dataRoot)
 			return nil, err
 		}
-		log.Info("Succesfully compute roots and populated preimage mapping", "original_dataRoot", blobPointer.DataRoot, "computed_dataRoot", dataRoot)
 	}
 
 	return payload, nil

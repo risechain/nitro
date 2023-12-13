@@ -13,9 +13,9 @@ import (
 // NMT Wrapper from celestia-app with support for populating a mapping of preimages
 
 const (
-	NamespaceSize       = 29
-	NamespaceIDSize     = 28
-	NamespaceVersionMax = math.MaxUint8
+	NamespaceSize       uint64 = 29
+	NamespaceIDSize            = 28
+	NamespaceVersionMax        = math.MaxUint8
 )
 
 // Fulfills the rsmt2d.Tree interface and rsmt2d.TreeConstructorFn function
@@ -122,10 +122,10 @@ func (w *ErasuredNamespacedMerkleTree) Push(data []byte) error {
 		return fmt.Errorf("pushed past predetermined square size: boundary at %d index at %d %d", 2*w.squareSize, w.axisIndex, w.shareIndex)
 	}
 	//
-	if len(data) < NamespaceSize {
+	if len(data) < int(NamespaceSize) {
 		return fmt.Errorf("data is too short to contain namespace ID")
 	}
-	nidAndData := make([]byte, NamespaceSize+len(data))
+	nidAndData := make([]byte, int(NamespaceSize)+len(data))
 	copy(nidAndData[NamespaceSize:], data)
 	// use the parity namespace if the cell is not in Q0 of the extended data square
 	if w.isQuadrantZero() {

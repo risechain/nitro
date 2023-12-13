@@ -22,7 +22,7 @@ func HashFromByteSlices(record func(bytes32, []byte), items [][]byte) []byte {
 		k := getSplitPoint(int64(len(items)))
 		left := HashFromByteSlices(record, items[:k])
 		right := HashFromByteSlices(record, items[k:])
-		return innerHash(left, right)
+		return innerHash(record, left, right)
 	}
 }
 
