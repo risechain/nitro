@@ -220,8 +220,21 @@ var TestBatchPosterConfig = BatchPosterConfig{
 	L1BlockBoundBypass: time.Hour,
 }
 
-func NewBatchPoster(ctx context.Context, dataPosterDB ethdb.Database, l1Reader *headerreader.HeaderReader, inbox *InboxTracker, streamer *TransactionStreamer, syncMonitor *SyncMonitor, config BatchPosterConfigFetcher, deployInfo *chaininfo.RollupAddresses, transactOpts *bind.TransactOpts, daWriter das.DataAvailabilityServiceWriter, celestiaWriter celestia.DataAvailabilityWriter) (*BatchPoster, error) {
-	seqInbox, err := bridgegen.NewSequencerInbox(deployInfo.SequencerInbox, l1Reader.Client())
+type BatchPosterOpts struct {
+	DataPosterDB   ethdb.Database
+	L1Reader       *headerreader.HeaderReader
+	Inbox          *InboxTracker
+	Streamer       *TransactionStreamer
+	SyncMonitor    *SyncMonitor
+	Config         BatchPosterConfigFetcher
+	DeployInfo     *chaininfo.RollupAddresses
+	TransactOpts   *bind.TransactOpts
+	DAWriter       das.DataAvailabilityServiceWriter
+	CelestiaWriter celestia.DataAvailabilityWriter
+}
+
+func NewBatchPoster(ctx context.Context, opts *BatchPosterOpts) (*BatchPoster, error) {
+	seqInbox, err := bridgegen.NewSequencerInbox(opts.DeployInfo.SequencerInbox, opts.L1Reader.Client())
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +275,7 @@ func NewBatchPoster(ctx context.Context, dataPosterDB ethdb.Database, l1Reader *
 		gasRefunderAddr: opts.Config().gasRefunder,
 		bridgeAddr:      opts.DeployInfo.Bridge,
 		daWriter:        opts.DAWriter,
-		celestiaWriter:  celestiaWriter,
+		celestiaWriter:  opts.CelestiaWriter,
 		redisLock:       redisLock,
 	}
 	b.messagesPerBatch, err = arbmath.NewMovingAverage[uint64](20)
@@ -1026,7 +1039,6 @@ func (b *BatchPoster) maybePostSequencerBatch(ctx context.Context) (bool, error)
 		}
 	}
 
-	data, err := b.encodeAddBatch(new(big.Int).SetUint64(batchPosition.NextSeqNum), batchPosition.MessageCount, b.building.msgCount, sequencerMsg, b.building.segments.delayedMsg)
 	// ideally we make this part of the above statment by having everything under a single unified interface (soon TM)
 	if b.daWriter == nil && b.celestiaWriter != nil {
 		// Store the data on Celestia and return a marhsalled BlobPointer, which gets used as the sequencerMsg
@@ -1040,7 +1052,7 @@ func (b *BatchPoster) maybePostSequencerBatch(ctx context.Context) (bool, error)
 		}
 	}
 
-	gasLimit, err := b.estimateGas(ctx, sequencerMsg, b.building.segments.delayedMsg)
+	data, err := b.encodeAddBatch(new(big.Int).SetUint64(batchPosition.NextSeqNum), batchPosition.MessageCount, b.building.msgCount, sequencerMsg, b.building.segments.delayedMsg)
 	if err != nil {
 		return false, err
 	}
