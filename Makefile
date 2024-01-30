@@ -92,6 +92,7 @@ build: $(patsubst %,$(output_root)/bin/%, nitro deploy relay daserver datool seq
 	@printf $(done)
 
 build-node-deps: $(go_source) build-prover-header build-prover-lib build-jit .make/solgen .make/cbrotli-lib
+	@printf $(done)
 
 test-go-deps: \
 	build-replay-env \
