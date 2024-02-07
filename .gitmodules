@@ -20,4 +20,4 @@
 [submodule "nitro-testnode"]
 	path = nitro-testnode
 	url = https://github.com/risechain/nitro-testnode.git
-	branch = rise_l1_sepolia
+	branch = rise

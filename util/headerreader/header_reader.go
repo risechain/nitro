@@ -393,7 +393,7 @@ func (s *HeaderReader) WaitForTxApproval(ctxIn context.Context, tx *types.Transa
 				continue
 			}
 		}
-		block, err := s.client.BlockByHash(ctx, receipt.BlockHash)
+		block, err := s.client.HeaderByHash(ctx, receipt.BlockHash)
 		if block != nil && err == nil {
 			return receipt, arbutil.DetailTxError(ctx, s.client, tx, receipt)
 		}
