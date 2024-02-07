@@ -20,7 +20,7 @@ require (
 	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/celestiaorg/nmt v0.20.0
 	github.com/celestiaorg/rsmt2d v0.11.0
-	github.com/cockroachdb/pebble v0.0.0-20230209160836-829675f94811
+	github.com/cockroachdb/pebble v0.0.0-20230906160148-46873a6a7a06
 	github.com/codeclysm/extract/v3 v3.0.2
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/enescakir/emoji v1.0.0
@@ -30,6 +30,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/hashicorp/golang-lru/v2 v2.0.5
 	github.com/holiman/uint256 v1.2.3
+	github.com/ipfs/boxo v0.13.1
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-libipfs v0.7.0
 	github.com/ipfs/interface-go-ipfs-core v0.11.0
@@ -59,6 +60,7 @@ require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/Jorropo/jsync v1.0.1 // indirect
+	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/alexbrainman/goissue34681 v0.0.0-20191006012335-3fc7a47baff5 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
@@ -107,7 +109,7 @@ require (
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3 // indirect
+	github.com/dop251/goja v0.0.0-20230806174421-c933cf95e127 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/ethereum/c-kzg-4844 v0.3.1 // indirect
@@ -145,9 +147,8 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/holiman/billy v0.0.0-20230718173358-1c7e68d277a7 // indirect
-	github.com/huin/goupnp v1.2.0 // indirect
+	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.13.1 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
 	github.com/ipfs/go-block-format v0.1.2 // indirect
 	github.com/ipfs/go-blockservice v0.5.1 // indirect
@@ -162,7 +163,6 @@ require (
 	github.com/ipfs/go-ipfs-blockstore v1.3.0 // indirect
 	github.com/ipfs/go-ipfs-delay v0.0.1 // indirect
 	github.com/ipfs/go-ipfs-ds-help v1.1.0 // indirect
-	github.com/ipfs/go-ipfs-exchange-interface v0.2.0 // indirect
 	github.com/ipfs/go-ipfs-pq v0.0.3 // indirect
 	github.com/ipfs/go-ipfs-redirects-file v0.1.1 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.3 // indirect
@@ -172,12 +172,10 @@ require (
 	github.com/ipfs/go-ipld-legacy v0.2.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/ipfs/go-merkledag v0.11.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-path v0.3.1 // indirect
 	github.com/ipfs/go-peertaskqueue v0.8.1 // indirect
 	github.com/ipfs/go-unixfsnode v1.8.1 // indirect
-	github.com/ipfs/go-verifcid v0.0.2 // indirect
 	github.com/ipld/go-car/v2 v2.10.2-0.20230622090957-499d0c909d33 // indirect
 	github.com/ipld/go-codec-dagpb v1.6.0 // indirect
 	github.com/ipld/go-ipld-prime v0.21.0 // indirect
@@ -317,7 +315,7 @@ require (
 )
 
 require (
-	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
+	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.6.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -343,10 +341,9 @@ require (
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/status-im/keycard-go v0.2.0 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
-	github.com/tklauser/go-sysconf v0.3.10 // indirect
-	github.com/tklauser/numcpus v0.4.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.12 // indirect
+	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
-	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 )
 
 replace github.com/tendermint/tendermint => github.com/celestiaorg/celestia-core v1.29.0-tm-v0.34.29
