@@ -38,6 +38,7 @@ import (
 	"github.com/offchainlabs/nitro/cmd/genericconf"
 	"github.com/offchainlabs/nitro/das"
 	"github.com/offchainlabs/nitro/das/celestia"
+	"github.com/offchainlabs/nitro/das/celestia_stub"
 	"github.com/offchainlabs/nitro/solgen/go/bridgegen"
 	"github.com/offchainlabs/nitro/util/arbmath"
 	"github.com/offchainlabs/nitro/util/headerreader"
@@ -1047,6 +1048,14 @@ func (b *BatchPoster) maybePostSequencerBatch(ctx context.Context) (bool, error)
 		// Need to verify inclusion into Blobstream using bsWrapper.VerifyAttestation
 		// deal with the "Incldued variable here"
 		sequencerMsg, _, err = b.celestiaWriter.Store(ctx, sequencerMsg)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if b.daWriter == nil && b.celestiaWriter == nil {
+		writer, _ := celestia_stub.NewCelestiaDAStub()
+		sequencerMsg, _, err = writer.Store(ctx, sequencerMsg)
 		if err != nil {
 			return false, err
 		}

@@ -52,6 +52,10 @@ const BrotliMessageHeaderByte byte = 0
 // which will be used to retrieve data from Celestia
 const CelestiaMessageHeaderFlag byte = 0x0c
 
+// CelestiaStubMessageHeaderFlag indicates that this data is a Blob Pointer
+// which will be used to retrieve data from Celestia
+const CelestiaStubMessageHeaderFlag byte = 0x02
+
 func IsDASMessageHeaderByte(header byte) bool {
 	return (DASMessageHeaderFlag & header) > 0
 }
@@ -70,6 +74,10 @@ func IsBrotliMessageHeaderByte(b uint8) bool {
 
 func IsCelestiaMessageHeaderByte(header byte) bool {
 	return (CelestiaMessageHeaderFlag & header) > 0
+}
+
+func IsCelestiaStubMessageHeaderByte(header byte) bool {
+	return (CelestiaStubMessageHeaderFlag & header) > 0
 }
 
 type DataAvailabilityCertificate struct {

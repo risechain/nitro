@@ -22,6 +22,7 @@ import (
 	"github.com/offchainlabs/nitro/arbutil"
 	"github.com/offchainlabs/nitro/das/celestia"
 	"github.com/offchainlabs/nitro/das/celestia/tree"
+	"github.com/offchainlabs/nitro/das/celestia_stub"
 	"github.com/offchainlabs/nitro/das/dastree"
 	"github.com/offchainlabs/nitro/zeroheavy"
 )
@@ -93,6 +94,19 @@ func parseSequencerMessage(ctx context.Context, batchNum uint64, data []byte, da
 			if payload == nil {
 				return parsedMsg, nil
 			}
+		}
+	}
+
+	if len(payload) > 0 && IsCelestiaStubMessageHeaderByte(payload[0]) {
+		log.Info("parseSequencerMessage message header is CelestiaStub")
+		reader, _ := celestia_stub.NewCelestiaDAStub()
+		var err error
+		payload, err = RecoverPayloadFromCelestiaStubBatch(ctx, batchNum, data, reader)
+		if err != nil {
+			return nil, err
+		}
+		if payload == nil {
+			return parsedMsg, nil
 		}
 	}
 
@@ -244,6 +258,33 @@ func RecoverPayloadFromDasBatch(
 		} else {
 			dastree.RecordHash(recordPreimage, payload)
 		}
+	}
+
+	return payload, nil
+}
+
+func RecoverPayloadFromCelestiaStubBatch(
+	ctx context.Context,
+	batchNum uint64,
+	sequencerMsg []byte,
+	reader celestia_stub.DataAvailabilityStubReader,
+) ([]byte, error) {
+	buf := bytes.NewBuffer(sequencerMsg[40:])
+
+	header, err := buf.ReadByte()
+	if err != nil {
+		log.Error("Couldn't deserialize Celestia Stub header byte", "err", err)
+		return nil, err
+	}
+	if !celestia_stub.IsCelestiaStubMessageHeaderByte(header) {
+		return nil, errors.New("tried to deserialize a message that doesn't have the Celestia Stub header")
+	}
+
+	blobPointer := buf.Bytes()
+	payload, err := reader.Read(ctx, blobPointer)
+	if err != nil {
+		log.Error("Failed to resolve blob pointer from celestia", "err", err)
+		return nil, err
 	}
 
 	return payload, nil

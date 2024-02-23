@@ -154,6 +154,8 @@ func devFlagArgs() []string {
 		"--init.empty=false",
 		"--http.port", "8547",
 		"--http.addr", "127.0.0.1",
+		"--ws.addr", "127.0.0.1",
+		"--ws.port", "8548",
 	}
 	return args
 }
